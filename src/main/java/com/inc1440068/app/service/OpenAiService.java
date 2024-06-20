@@ -12,14 +12,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class OpenAiService {
     private static final Logger logger = LoggerFactory.getLogger(OpenAiService.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final Map<String, Deque<Map<String, String>>> conversationHistories = new HashMap<>();
+    private static final int MESSAGE_LIMIT = 10;
 
     @Value("${openai.api.key}")
     private String apiKey;
@@ -27,7 +28,7 @@ public class OpenAiService {
     @Value("${openai.api.url}")
     private String apiUrl;
 
-    public Object getAnswer(String question) {
+    public Object getAnswer(String conversationId, String question) {
         RestTemplate restTemplate = new RestTemplate();
 
         // Prepare headers
@@ -35,15 +36,21 @@ public class OpenAiService {
         headers.set("Authorization", "Bearer " + apiKey);
         headers.set("Content-Type", "application/json");
 
-        Map<String, Object> message = new HashMap<>();
-        message.put("role", "user");
-        message.put("content", question);
+        Deque<Map<String, String>> conversationHistory = conversationHistories.computeIfAbsent(conversationId, k -> new LinkedList<>());
+        Map<String, String> userMessage = new HashMap<>();
+        userMessage.put("role", "user");
+        userMessage.put("content", question);
+        conversationHistory.add(userMessage);
+
+        while (conversationHistory.size() > MESSAGE_LIMIT) {
+            conversationHistory.pollFirst();
+        }
 
         // Prepare request body
         Map<String, Object> request = new HashMap<>();
-        request.put("model", "gpt-4");
-        request.put("messages", Arrays.asList(message));
-        request.put("max_tokens", 1000);
+        request.put("model", "gpt-4o");
+        request.put("messages", new ArrayList<>(conversationHistory));
+        request.put("max_tokens", 2000);
         request.put("temperature", 0.1);
 
         // Create HttpEntity with the headers and request body
@@ -59,6 +66,16 @@ public class OpenAiService {
             if (choices.isArray() && choices.size() > 0) {
                 JsonNode messageNode = choices.get(0).path("message");
                 content = messageNode.path("content").asText();
+
+                Map<String, String> assistantMessage = new HashMap<>();
+                assistantMessage.put("role", "assistant");
+                assistantMessage.put("content", content);
+                conversationHistory.add(assistantMessage);
+
+                // Trim conversation history to the last MESSAGE_LIMIT messages
+                while (conversationHistory.size() > MESSAGE_LIMIT) {
+                    conversationHistory.pollFirst();
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -68,7 +85,6 @@ public class OpenAiService {
 
         Map<String, String> rtn = new HashMap<>();
         rtn.put("answer", content);
-
 
         return rtn;
     }

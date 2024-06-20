@@ -26,6 +26,7 @@ public class QnaController {
     public Object getAnswer(@RequestBody Map<String, String> payload) {
         logger.info("Received request with payload: {}", payload);
         String question = payload.get("question");
-        return openAiService.getAnswer(question);
+        String conversationId = payload.get("conversationId");
+        return openAiService.getAnswer(conversationId, question);
     }
 }
