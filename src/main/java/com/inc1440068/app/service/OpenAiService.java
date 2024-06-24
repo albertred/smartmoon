@@ -20,7 +20,10 @@ public class OpenAiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, Deque<Map<String, String>>> conversationHistories = new HashMap<>();
+    private final Map<String, Long> conversationAges = new HashMap<>();
+
     private static final int MESSAGE_LIMIT = 10;
+
 
     @Value("${openai.api.key}")
     private String apiKey;
@@ -28,7 +31,25 @@ public class OpenAiService {
     @Value("${openai.api.url}")
     private String apiUrl;
 
+    private void cleanup() {
+        conversationAges.keySet().stream().forEach(k -> {
+            long lastUpdated = conversationAges.get(k);
+            if (is24HoursOld(lastUpdated)) {
+                conversationAges.remove(k);
+                conversationHistories.remove(k);
+            }
+        });
+    }
+
+    private boolean is24HoursOld(long timestamp) {
+        long currentTime = System.currentTimeMillis();
+        long twentyFourHoursInMillis = 24 * 60 * 60 * 1000;
+        return (currentTime - timestamp) >= twentyFourHoursInMillis;
+    }
+
     public Object getAnswer(String conversationId, String question) {
+        cleanup();
+
         RestTemplate restTemplate = new RestTemplate();
 
         // Prepare headers
@@ -36,7 +57,18 @@ public class OpenAiService {
         headers.set("Authorization", "Bearer " + apiKey);
         headers.set("Content-Type", "application/json");
 
-        Deque<Map<String, String>> conversationHistory = conversationHistories.computeIfAbsent(conversationId, k -> new LinkedList<>());
+        Deque<Map<String, String>> conversationHistory = null;
+        if (conversationId != null) {
+            conversationHistory = conversationHistories.get(conversationId);
+            if (conversationHistory == null) {
+                conversationHistory = new ArrayDeque<>();
+                conversationHistories.put(conversationId, conversationHistory);
+            }
+            conversationAges.put(conversationId, System.currentTimeMillis());
+        } else {
+            conversationHistory = new ArrayDeque<>();
+        }
+
         Map<String, String> userMessage = new HashMap<>();
         userMessage.put("role", "user");
         userMessage.put("content", question);
