@@ -36,16 +36,18 @@ public class QnaController {
         String question = (String) payload.get("question");
         String conversationId = (String) payload.get("conversationId");
 
-        List<FileInfo> files = ((List<Map>) payload.get("files"))
-                .stream()
-                .map(e -> new FileInfo()
-                        .setFilename((String) e.get("filename"))
-                        .setContent((String) e.get("content")))
-                .collect(Collectors.toList());
+        if (payload.get("files") != null) {
+            List<FileInfo> files = ((List<Map>) payload.get("files"))
+                    .stream()
+                    .map(e -> new FileInfo()
+                            .setFilename((String) e.get("filename"))
+                            .setContent((String) e.get("content")))
+                    .collect(Collectors.toList());
 
-        if (files != null && !files.isEmpty()) {
-            String additionalPrompt = filesService.generateAdditionalPrompt(files);
-            question += "\nFYI - See below attachment(s):\n" + additionalPrompt;
+            if (!files.isEmpty()) {
+                String additionalPrompt = filesService.generateAdditionalPrompt(files);
+                question += "\nFYI - See below attachment(s):\n" + additionalPrompt;
+            }
         }
 
         return openAiService.getAnswer(conversationId, question);
