@@ -6,6 +6,7 @@ import com.inc1440068.app.service.OpenAiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -31,8 +32,14 @@ public class QnaController {
     }
 
     @PostMapping("/qna")
-    public Object getAnswer(@RequestBody Map<String, Object> payload) throws IOException {
+    public ResponseEntity<Object> getAnswer(@RequestBody Map<String, Object> payload) throws IOException {
         logger.info("Received request with payload: {}", payload);
+        
+        // Validate required fields
+        if (!payload.containsKey("question")) {
+            return ResponseEntity.badRequest().body("Missing required field: question");
+        }
+
         String question = (String) payload.get("question");
         String conversationId = (String) payload.get("conversationId");
 
@@ -50,6 +57,6 @@ public class QnaController {
             }
         }
 
-        return openAiService.getAnswer(conversationId, question);
+        return ResponseEntity.ok(openAiService.getAnswer(conversationId, question));
     }
 }
